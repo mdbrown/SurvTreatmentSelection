@@ -1,11 +1,5 @@
 ##function to calculate measures
 
-surv.trtsel(cox.object, data){
-  
-  
-  #need risk estimates, treatment effect 
-  out <- data.frame(data)
-}
 
 
 
@@ -58,7 +52,7 @@ SIM.data.singleMarker <-
     #Y is the marker values
     #browser()
     result <- as.data.frame(cbind(xi, di, T, Y)) 
-    names(result) = c( "xi", "di", "T",  "Y")
+    names(result) = c( "xi", "di", "A",  "Y")
     return(result)
   }
 
@@ -68,33 +62,26 @@ SIM.data.singleMarker <-
 ##################
 
 
-get.censoring.weights <- function(dc, data, weights = NULL, new.times, 
-                                  ix.ctrl, time.scale = 'time'){
+get.censoring.weights <- function(ti, stime, status){
+
+  ix.ctrl <- stime >= ti
+  ix.cens <- stime < ti & status == 0 
+  new.times.case.ctrl <- stime
   
-  new.times.case.ctrl <- new.times
-  
-  if(time.scale == 'time'){
+
     # this saves some time. survival curve doesn't need to be estimated past ti.
-    ix <- data$time > (dc$ti + 0.1) # the magic number is necessary, otherwise the KM estimate at dc$ti is off.
-    data$time[ix] <- (dc$ti + 0.1)
+    ix <- stime > (ti + 0.1) # the magic number is necessary, otherwise the KM estimate at dc$ti is off.
+    stime[ix] <- (ti + 0.1)
     
-    cc  <- survfit(Surv(time, status == 0) ~ 1,
-                   data = data, weights = weights, se.fit = F, type = 'kaplan-meier')
-    new.times.case.ctrl[ix.ctrl] <- dc$ti
+    cc  <- survfit(Surv(stime, status == 0) ~ 1,
+                   se.fit = FALSE, type = 'kaplan-meier')
+    new.times.case.ctrl[ix.ctrl] <- ti
     
-  }else{ # time.scale == t.star
-    ix <- data$t.star > (dc$pred.time + 0.1) 
-    data$t.star[ix] <- (dc$pred.time + 0.1)
-    
-    cc  <- survfit(Surv(t.star, status == 0) ~ 1,
-                   data = data, weights = weights, se.fit = F, type = 'kaplan-meier')
-    new.times.case.ctrl[ix.ctrl] <- dc$pred.time
-  }
-  
-  new.times.case.ctrl.sorted.incr <- sort(new.times.case.ctrl, decreasing = F, method = 'shell')
+  new.times.case.ctrl.sorted.incr <- sort(new.times.case.ctrl, decreasing = FALSE, method = 'shell')
   recover.original.order <- rank(new.times.case.ctrl)
   
   cens.weights <- summary(cc, times = new.times.case.ctrl.sorted.incr)$surv[recover.original.order]
-  
-  return(1/cens.weights)
+  cens.weights <- 1/cens.weights
+  cens.weights[ix.cens] <- 0 
+  return(cens.weights)
 }
