@@ -2,14 +2,56 @@ library(survival)
 
 source("functions.R")
 
-mydat <- SIM.data.singleMarker(nn=2000,
+mydat <- SIM.data.singleMarker(nn=502,
                                b.t = log(1),
                                b.y = log(2), 
-                               b.yt = log(1.5), 
+                               b.yt = log(1.25), 
                                cens.lam = .05, time.max = 8)
-#table(mydat$di)/250
+
+st <- surv.trtsel(time = mydat$xi, event = mydat$di, marker = mydat$Y, trt = mydat$A, 
+                  predict.time= 5)
+
+plot(st, plot.type = "risk")
+plot(st, plot.type = "treatment effect") 
+
+evaluate(st)
 
 
+#small.simulation to check if estimates are consistent
+set.seed(5)
+S = 100
+res <- data.frame(matrix(nrow = S*2, ncol  = 6)); names(res) = c('theta', 'B.neg', 'B.pos', 'Pmneg', 'rho', 'estimate')
+for(s in 1:S){
+  mydat <- SIM.data.singleMarker(nn=1000,
+                                 b.t = log(1),
+                                 b.y = log(2), 
+                                 b.yt = log(1.25), 
+                                 cens.lam = .05, time.max = 8)
+  
+  st <- surv.trtsel(time = mydat$xi, event = mydat$di, marker = mydat$Y, trt = mydat$A, 
+                    predict.time= 5)
+  ind <- (s*2-1):(s*2)
+  res[ind,] <-  evaluate(st)
+  
+ # if(s%%10 == 0 ) {
+    cat( paste((s/S)*100, 'percent complete\n'))
+  #}
+}
+
+long.res <- melt(res, id.vars = "estimate" )
+ggplot(long.res, aes(value, colour = factor(estimate), fill = factor(estimate))) + 
+  geom_density(alpha = .5) + facet_grid(.~variable, scales = "free_x")
+
+aggregate(res, by = list(res$estimate), FUN = 'mean', na.rm = TRUE)
+
+#Group.1      theta      B.neg      B.pos   Pmneg       rho estimate
+#1       1 0.02940426 0.05715534 0.03303418     NaN 0.4268553        1
+#2       2 0.02910461 0.05554046 0.03374389 0.51749 0.4268509        2
+
+
+
+
+##################################################################
 coxfit <- coxph(Surv(xi, di) ~A*Y, data = mydat, ties = "breslow")
 
 
@@ -33,8 +75,8 @@ F <- ecdf(mydat$Y)(mydat$Y)
 
 ooo <- order(F)
 plot(F[ooo], trt.effect[ooo], type = "l", ylim = c(-1, 1)); abline(h=0, lty = 2)
-#plot(F[ooo], risk.a0[ooo], type = "l", lty = 2, xlim = c(0,1), ylim = c(0,1))
-#lines(F[ooo], risk.a1[ooo])
+plot(F[ooo], risk.a0[ooo], type = "l", lty = 2, xlim = c(0,1), ylim = c(0,1))
+lines(F[ooo], risk.a1[ooo])
 title(t0)
 }
 
