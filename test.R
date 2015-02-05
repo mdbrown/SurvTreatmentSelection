@@ -23,9 +23,9 @@ S = 100
 res <- data.frame(matrix(nrow = S*2, ncol  = 6)); names(res) = c('theta', 'B.neg', 'B.pos', 'Pmneg', 'rho', 'estimate')
 for(s in 1:S){
   mydat <- SIM.data.singleMarker(nn=1000,
-                                 b.t = log(1),
+                                 b.a = log(1),
                                  b.y = log(2), 
-                                 b.yt = log(1.25), 
+                                 b.ya = log(1.25), 
                                  cens.lam = .05, time.max = 8)
   
   st <- surv.trtsel(time = mydat$xi, event = mydat$di, marker = mydat$Y, trt = mydat$A, 
@@ -33,9 +33,9 @@ for(s in 1:S){
   ind <- (s*2-1):(s*2)
   res[ind,] <-  evaluate(st)
   
- # if(s%%10 == 0 ) {
+  if(s%%10 == 0 ) {
     cat( paste((s/S)*100, 'percent complete\n'))
-  #}
+  }
 }
 
 long.res <- melt(res, id.vars = "estimate" )
@@ -48,8 +48,17 @@ aggregate(res, by = list(res$estimate), FUN = 'mean', na.rm = TRUE)
 #1       1 0.02940426 0.05715534 0.03303418     NaN 0.4268553        1
 #2       2 0.02910461 0.05554046 0.03374389 0.51749 0.4268509        2
 
+know.the.truth(b.a = log(1),
+               b.y = log(2), 
+               b.ya = log(1.25), 
+               t0 = 5, 
+               lam0 = 0.1)
 
-
+#$P.neg  0.5
+#$rho    0.4275958
+#$B.neg  0.05420165
+#$B.pos  0.0287655
+#$Theta  0.02710083
 
 ##################################################################
 coxfit <- coxph(Surv(xi, di) ~A*Y, data = mydat, ties = "breslow")

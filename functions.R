@@ -11,6 +11,10 @@ surv.trtsel <- function(time, event, marker, trt, predict.time){
   risk.a0 <- c( 1-summary(sfit.a0, times = predict.time)$surv)
   risk.a1 <- c(1-summary(sfit.a1, times = predict.time)$surv)
 
+  w.cens <- get.censoring.weights(ti = predict.time, 
+                                  stime = time, 
+                                  status = event)
+  
   out <- list("derived.data" = data.frame('time' = time, 
                                    'event' = event, 
                                    'marker' = marker, 
@@ -18,12 +22,51 @@ surv.trtsel <- function(time, event, marker, trt, predict.time){
                                    'risk.trt' = risk.a0, 
                                    'risk.no.trt' = risk.a1, 
                                    'trt.effect' = risk.a0 - risk.a1, 
-                                   'marker.neg' = risk.a0 <= risk.a1), 
+                                   'marker.neg' = risk.a0 <= risk.a1, 
+                                   'w.cens' = w.cens), 
        "prediction.time" = predict.time)
   class(out) <- "surv.trtsel"
   out
   
 }
+
+
+
+surv.trtsel.mult <- function(coxfit, data, predict.time){ 
+  
+  #coxfit <- coxph(Surv(time, event)~marker*trt)
+  data.a0 <- data
+  data.a0$trt <- 0
+  data.a1 <- data
+  data.a1$trt <- 1
+  
+
+  sfit.a0 <- survfit(coxfit, newdata = data.a0)
+  sfit.a1 <- survfit(coxfit, newdata = data.a1)
+  
+  risk.a0 <- c( 1-summary(sfit.a0, times = predict.time)$surv)
+  risk.a1 <- c(1-summary(sfit.a1, times = predict.time)$surv)
+  
+  w.cens <- get.censoring.weights(ti = predict.time, 
+                                  stime = data$time, 
+                                  status = data$event)
+  marker.names <- names(coxfit$coefficients)[is.element(names(coxfit$coefficients), names(data))]
+  out <- list("derived.data" = data.frame('marker' = data[,marker.names],
+                                          'time' = data$time, 
+                                          'event' = data$event,
+                                          'trt' = data$trt, 
+                                          'risk.trt' = risk.a0, 
+                                          'risk.no.trt' = risk.a1, 
+                                          'trt.effect' = risk.a0 - risk.a1, 
+                                          'marker.neg' = risk.a0 <= risk.a1, 
+                                          'w.cens' = w.cens), 
+              "prediction.time" = predict.time)
+  
+  class(out) <- "surv.trtsel"
+  out
+  
+}
+
 
 ## evaluation method for surv.trtsel
 evaluate<- function(x, ...){
@@ -33,9 +76,7 @@ evaluate<- function(x, ...){
 evaluate.surv.trtsel <- function(x, ...){
 
   t0 <-  x$prediction.time
-  w.cens <- get.censoring.weights(ti = t0, 
-                                  stime = x$derived.data$time, 
-                                  status = x$derived.data$event)
+  
   
   
   #prevalence
@@ -113,16 +154,16 @@ plot.surv.trtsel <- function(x, plot.type = c("risk", "treatment effect"), ...){
   require(ggplot2)
   plot.type = match.arg(plot.type)
   
- 
+  wi <- x$derived.data$w.cens
   
   if(plot.type == "risk"){
-    
+
     n <- nrow(x$derived.data)
     
-    F.x <- ecdf(x$derived.data$marker)(x$derived.data$marker)
+    F.x <- ecdf(x$derived.data$marker)(x$derived.data$marker[wi > 0])
     
-    dat <- data.frame('risk' = c(x$derived.data$risk.trt, x$derived.data$risk.no.trt),
-                      'treatment' = factor(rep(c('Treatment', 'No Treatment'), c(n, n))), 
+    dat <- data.frame('risk' = c(x$derived.data$risk.trt[wi > 0], x$derived.data$risk.no.trt[wi > 0]),
+                      'treatment' = factor(rep(c('Treatment', 'No Treatment'), c(sum(wi >0), sum(wi > 0)))), 
                       'F.x' = rep(F.x, 2))
     p <- ggplot(dat, aes(F.x, risk, linetype = treatment, color = treatment)) + 
       geom_step(size = 1.1) + theme(legend.title = element_blank(), text = element_text(size = 18)) + 
@@ -130,19 +171,19 @@ plot.surv.trtsel <- function(x, plot.type = c("risk", "treatment effect"), ...){
   
   }else if(plot.type == "treatment effect"){
     
-    F.delta <- ecdf(x$derived.data$trt.effect)(x$derived.data$trt.effect)
+    F.delta <- ecdf(x$derived.data$trt.effect)(x$derived.data$trt.effect[wi>0])
     
-    dat <- data.frame('trt.effect' = x$derived.data$trt.effect, 'F.delta' = F.delta)
+    dat <- data.frame('trt.effect' = x$derived.data$trt.effect[wi > 0], 'F.delta' = F.delta)
 
     p <- ggplot(dat, aes(F.delta, trt.effect))+ 
       geom_hline(yintercept = 0, size = .5, linetype = 1, colour = "grey35")  + 
       geom_step(size = 1.1) + 
       xlab("% below treatment effect") + ylab("treatment effect")  +
-      geom_hline(yintercept = mean(dat$trt.effect), size = .5, linetype = 3)
+      geom_hline(yintercept = sum(dat$trt.effect*wi[wi>0])/sum(wi), size = .5, linetype = 3)
     
   }
   print(p)
-  invisible(p)
+  invisible(list('dat' = dat, 'p' = p))
 }
 
 
@@ -153,9 +194,9 @@ SIM.data.singleMarker <-
   function(nn,
            mu = 0, 
            Sigma = 1, 
-           b.y = log(3),
-           b.t = log(2), 
-           b.yt = log(1.5),
+           b.a = log(1),
+           b.y = log(2), 
+           b.ya = log(1.25),
            lam0 = .1, 
            cens.lam = 0, 
            time.max = NULL)
@@ -198,6 +239,39 @@ SIM.data.singleMarker <-
     return(result)
   }
 
+
+##################
+## Calculate 'true' parameter values
+##################
+
+know.the.truth <- 
+  function(f_y = function(y){dnorm(y, mean = 0, sd = 1)}, 
+           b.a = log(1), #treatment main effect
+           b.y = log(2), #marker main effect
+           b.ya = log(1.25), #marker treatment interaction
+           t0 = 5,  #prediction time
+           lam0 = .1)
+  {
+    
+    P.neg <- integrate(f_y, lower = -b.a/b.ya, upper = Inf)$value
+    
+    #S(t | y, a = 1)*f(y) 
+    sy.1 <- function(y) exp(-lam0*t0*exp(b.a + b.y*y+b.ya*y))*f_y(y)
+    #S(t | y, a = 0)*f(y)
+    sy.0 <- function(y) exp(-lam0*t0*exp(b.y*y))*f_y(y)
+    
+    #multiply both integrals by .5 = Pr(A = 0) = Pr(A = 1)
+    rho <- 1 - (0.5*integrate(sy.1, lower = -Inf, upper = Inf)$value + 
+                0.5*integrate(sy.0, lower = -Inf, upper = Inf)$value)
+    
+   
+    
+    B.neg <- (integrate(sy.0, lower = -b.a/b.ya, upper = Inf)$value -  integrate(sy.1, lower = -b.a/b.ya, upper = Inf)$value)/P.neg 
+    B.pos <- (integrate(sy.1, lower = -Inf, upper = -b.a/b.ya)$value -  integrate(sy.0, lower =-Inf, upper = -b.a/b.ya)$value)/(1-P.neg) 
+
+    Theta <- B.neg*P.neg
+    return(list("P.neg" = P.neg, "rho" = rho, "B.neg" = B.neg, "B.pos" = B.pos, "Theta" = Theta))
+  }
 
 ##################
 ## subroutines
