@@ -2,10 +2,10 @@ library(survival)
 
 source("functions.R")
 
-mydat <- SIM.data.singleMarker(nn=502,
-                               b.t = log(1),
+mydat <- SIM.data.singleMarker(nn=1000,
+                               b.a = log(1),
                                b.y = log(2), 
-                               b.yt = log(1.25), 
+                               b.ya = log(1.25), 
                                cens.lam = .05, time.max = 8)
 
 st <- surv.trtsel(time = mydat$xi, event = mydat$di, marker = mydat$Y, trt = mydat$A, 
@@ -25,8 +25,8 @@ for(s in 1:S){
   mydat <- SIM.data.singleMarker(nn=1000,
                                  b.a = log(1),
                                  b.y = log(2), 
-                                 b.ya = log(1.25), 
-                                 cens.lam = .05, time.max = 8)
+                                 b.ya = log(3), 
+                                 cens.lam = .05, lam0 = 0.1, time.max = 8)
   
   st <- surv.trtsel(time = mydat$xi, event = mydat$di, marker = mydat$Y, trt = mydat$A, 
                     predict.time= 5)
@@ -40,25 +40,29 @@ for(s in 1:S){
 
 long.res <- melt(res, id.vars = "estimate" )
 ggplot(long.res, aes(value, colour = factor(estimate), fill = factor(estimate))) + 
-  geom_density(alpha = .5) + facet_grid(.~variable, scales = "free_x")
+  geom_density(alpha = .5, adjust = 3/5) + facet_grid(.~variable, scales = "free_x")
 
 aggregate(res, by = list(res$estimate), FUN = 'mean', na.rm = TRUE)
 
-#Group.1      theta      B.neg      B.pos   Pmneg       rho estimate
-#1       1 0.02940426 0.05715534 0.03303418     NaN 0.4268553        1
-#2       2 0.02910461 0.05554046 0.03374389 0.51749 0.4268509        2
+# 100 sims with sample size 1000 each
+#means 
+#Group.1      theta     B.neg     B.pos   Pmneg       rho estimate
+#1       1 0.09542139 0.1909696 0.1059972     NaN 0.4420889        empirical
+#2       2 0.09713417 0.1945517 0.1063026 0.49795 0.4438968        model-based
 
 know.the.truth(b.a = log(1),
                b.y = log(2), 
-               b.ya = log(1.25), 
+               b.ya = log(3), 
                t0 = 5, 
                lam0 = 0.1)
 
-#$P.neg  0.5
-#$rho    0.4275958
-#$B.neg  0.05420165
-#$B.pos  0.0287655
-#$Theta  0.02710083
+#$P.neg 0.5
+#$rho 0.4434817
+#$B.neg 0.1925729
+#$B.pos  0.1035932
+#$Theta 0.09628643
+
+
 
 ##################################################################
 coxfit <- coxph(Surv(xi, di) ~A*Y, data = mydat, ties = "breslow")

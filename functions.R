@@ -82,6 +82,7 @@ evaluate.surv.trtsel <- function(x, ...){
   #prevalence
   ###########
   attach(x$derived.data)
+ 
   #mod
   rho.mod <- mean(risk.no.trt*(1-trt) + risk.trt*trt);
   #emp
@@ -90,15 +91,17 @@ evaluate.surv.trtsel <- function(x, ...){
   #proportion marker negative
   ###########################
   
-  p.marker.neg <- mean(marker.neg)
+  p.marker.neg <- mean(marker.neg) # sum(marker.neg*wi)/sum(wi)
   
   #Average benefit of no treatment among marker negatives
   #Bneg
   ########################################################
   #mod
   
-  Bneg.mod <- ifelse(sum(marker.neg) >0, -sum(trt.effect[marker.neg]*w.cens[marker.neg])/sum(marker.neg*w.cens), 0)
-  if(sum(marker.neg)==0) print("Bneg.mod is set to zero")
+ # Bneg.mod <- ifelse(sum(marker.neg) >0, -sum(trt.effect[marker.neg]*w.cens[marker.neg])/sum(marker.neg*w.cens), 0)
+ Bneg.mod <- ifelse(sum(marker.neg) >0, -mean(trt.effect[marker.neg]), 0)
+
+ if(sum(marker.neg)==0) print("Bneg.mod is set to zero")
   
   #emp
   num <- (w.cens*I(time < t0)*I(marker.neg)); den <- (w.cens*I(marker.neg))
@@ -115,7 +118,7 @@ evaluate.surv.trtsel <- function(x, ...){
   ########################################################
   #mod
   marker.pos <- !marker.neg
-  Bpos.mod <- ifelse(sum(marker.pos) >0, sum(trt.effect[marker.pos]*w.cens[marker.pos])/sum(marker.pos*w.cens), 0)
+  Bpos.mod <- ifelse(sum(marker.pos) >0, mean(trt.effect[marker.pos]), 0)
   if(sum(marker.pos)==0) print("Bpos.mod is set to zero")
   
   #emp
@@ -204,7 +207,7 @@ SIM.data.singleMarker <-
    
     Y <- rnorm(nn, mu, Sigma)
     T <- rbinom(nn, size = 1,prob = .5)
-    mu.i <- Y*b.y + b.t*T + b.yt*T*Y  
+    mu.i <- Y*b.y + b.a*T + b.ya*T*Y  
     
     #true survival time
     r.ti <- log(-log(runif(nn)))
@@ -264,8 +267,7 @@ know.the.truth <-
     rho <- 1 - (0.5*integrate(sy.1, lower = -Inf, upper = Inf)$value + 
                 0.5*integrate(sy.0, lower = -Inf, upper = Inf)$value)
     
-   
-    
+
     B.neg <- (integrate(sy.0, lower = -b.a/b.ya, upper = Inf)$value -  integrate(sy.1, lower = -b.a/b.ya, upper = Inf)$value)/P.neg 
     B.pos <- (integrate(sy.1, lower = -Inf, upper = -b.a/b.ya)$value -  integrate(sy.0, lower =-Inf, upper = -b.a/b.ya)$value)/(1-P.neg) 
 
